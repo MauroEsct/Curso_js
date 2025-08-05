@@ -1,0 +1,22 @@
+[
+    {
+        "id": 1,
+        "nombre": "Arábica",
+        "precio": 25
+    },
+    {
+        "id": 2,
+        "nombre": "Robusta",
+        "precio": 20
+    },
+    {
+        "id": 3,
+        "nombre": "Typica",
+        "precio": 28
+    },
+    {
+        "id": 4,
+        "nombre": "Catuaí",
+        "precio": 23
+    }
+]

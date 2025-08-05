@@ -4,8 +4,9 @@ const MENU_PRINCIPAL_TEXTO = "¡Hola! Soy CoffeeBot Asistente de Granja El Para�
                              "1. Hacer un pedido de café\n" +
                              "2. ¿Dónde nos encontramos?\n" +
                              "3. Plazos de entrega\n" +
-                             "4. Ver historial de pedidos\n" +
-                             "5. Salir";
+                             "4. Ver carrito y finalizar compra\n" +
+                             "5. Ver historial de pedidos\n" +
+                             "6. Salir";
 
 const MENU_CAFE_TEXTO_BASE = "¡Claro! ¿Qué tipo de café te interesa?\n" +
                              "Ingresa el número del café:\n";
@@ -13,6 +14,7 @@ const MENU_CAFE_TEXTO_BASE = "¡Claro! ¿Qué tipo de café te interesa?\n" +
 const MENSAJE_ERROR_OPCION_INVALIDA = "Opción inválida. Por favor, ingresa un número válido del menú.";
 const MENSAJE_DESPEDIDA = "¡Gracias por visitar Granja El Paraíso! ¡Vuelve pronto!";
 const MENSAJE_NO_HAY_PEDIDOS = "Aún no nos has hecho un pedido.";
+const MENSAJE_CARRITO_VACIO = "Tu carrito está vacío. Puedes agregar productos desde la opción 1.";
 
 const INFO_UBICACION_TEXTO = "¡Estamos en: calle falsa 123, Buenos Aires, Argentina!\n¡Te esperamos de Lunes a Viernes de 9 a 15 hs!";
 const INFO_ENTREGA_TEXTO = "Nuestros plazos de entrega habituales son:\n" +
@@ -20,23 +22,18 @@ const INFO_ENTREGA_TEXTO = "Nuestros plazos de entrega habituales son:\n" +
                            "- Fuera de Buenos Aires: 3 a 7 días hábiles.\n" +
                            "Recordá que los tiempos pueden variar.";
 
-const PRODUCTOS_CAFE = [
-    { id: 1, nombre: "Arábica", precio: 25 },
-    { id: 2, nombre: "Robusta", precio: 20 },
-    { id: 3, nombre: "Typica", precio: 28 },
-    { id: 4, nombre: "Catuaí", precio: 23 }
-];
-
+// --- Referencias a los elementos del DOM ---
 const chatBox = document.getElementById('chatBox');
 const userInput = document.getElementById('userInput');
 const sendButton = document.getElementById('sendButton');
 
-//
-
+// --- Variables de Estado de la Conversación y DATOS DINÁMICOS ---
 let estadoConversacion = 'inicio';
-let pedidoActual = {};
+let carrito = [];
+let pedidoTemporal = {};
+let productosCafe = [];
 
-//
+// --- Funciones Auxiliares del Chat ---
 function addMessage(text, sender) {
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('message', sender);
@@ -47,7 +44,7 @@ function addMessage(text, sender) {
 
 function getMenuCafeTexto() {
     let menu = MENU_CAFE_TEXTO_BASE;
-    PRODUCTOS_CAFE.forEach(cafe => {
+    productosCafe.forEach(cafe => {
         menu += `${cafe.id}. ${cafe.nombre} ($${cafe.precio}/saco)\n`;
     });
     return menu;
@@ -63,6 +60,31 @@ function guardarPedidoEnLocalStorage(pedido) {
     localStorage.setItem('historialPedidos', JSON.stringify(pedidosGuardados));
 }
 
+function mostrarCarrito() {
+    if (carrito.length === 0) {
+        addMessage(MENSAJE_CARRITO_VACIO, 'bot');
+        setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 1000);
+        return;
+    }
+
+    let carritoTexto = "--- Tu Carrito ---\n\n";
+    let totalGeneral = 0;
+
+    carrito.forEach((item, index) => {
+        const subtotal = calcular_subtotal(item.cantidad, item.cafe.precio);
+        carritoTexto += `Ítem ${index + 1}: ${item.cafe.nombre} | Cantidad: ${item.cantidad} | Subtotal: $${subtotal.toFixed(2)}\n`;
+        totalGeneral += subtotal;
+    });
+
+    carritoTexto += `\n-------------------------\n`;
+    carritoTexto += `Total General: $${totalGeneral.toFixed(2)}\n\n`;
+    carritoTexto += "¿Deseas finalizar la compra? (1. Sí / 2. No)";
+    
+    addMessage(carritoTexto.replace(/\n/g, '<br>'), 'bot');
+    estadoConversacion = 'finalizando_compra';
+}
+
+
 function mostrarHistorialPedidos() {
     const pedidosGuardados = JSON.parse(localStorage.getItem('historialPedidos')) || [];
     let historialTexto = "";
@@ -73,9 +95,13 @@ function mostrarHistorialPedidos() {
         historialTexto = "--- Tu Historial de Pedidos ---\n\n";
         pedidosGuardados.forEach((pedido, index) => {
             historialTexto += `Pedido #${index + 1}:\n`;
-            historialTexto += `  Tipo: ${pedido.cafe.nombre}\n`;
-            historialTexto += `  Cantidad: ${pedido.cantidad} sacos\n`;
-            historialTexto += `  Subtotal: $${pedido.subtotal.toFixed(2)}\n`;
+            let totalPedido = 0;
+            pedido.forEach(item => {
+                const subtotal = calcular_subtotal(item.cantidad, item.cafe.precio);
+                historialTexto += `  Tipo: ${item.cafe.nombre} | Cantidad: ${item.cantidad} | Subtotal: $${subtotal.toFixed(2)}\n`;
+                totalPedido += subtotal;
+            });
+            historialTexto += `  Total del pedido: $${totalPedido.toFixed(2)}\n`;
             historialTexto += `------------------------------\n`;
         });
         historialTexto += "\n--- Fin del Historial ---";
@@ -83,6 +109,24 @@ function mostrarHistorialPedidos() {
     addMessage(historialTexto.replace(/\n/g, '<br>'), 'bot');
     
     setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 1000);
+}
+
+// --- Lógica Asíncrona para cargar datos ---
+async function cargarProductos() {
+    try {
+        addMessage("Cargando nuestro catálogo de productos...", 'bot');
+        const response = await fetch('./data/productos.json'); 
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        productosCafe = await response.json();
+        addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot');
+    } catch (error) {
+        console.error('Error al cargar los productos:', error);
+        addMessage('¡Lo sentimos! No se pudo cargar el catálogo de productos en este momento.', 'bot');
+        userInput.disabled = true;
+        sendButton.disabled = true;
+    }
 }
 
 
@@ -109,10 +153,13 @@ function processUserInput(input) {
                     setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 500);
                     break;
                 case 4:
+                    mostrarCarrito();
+                    break;
+                case 5:
                     mostrarHistorialPedidos();
                     estadoConversacion = 'inicio';
                     break;
-                case 5:
+                case 6:
                     botResponse = MENSAJE_DESPEDIDA;
                     userInput.disabled = true;
                     sendButton.disabled = true;
@@ -125,10 +172,10 @@ function processUserInput(input) {
             break;
 
         case 'pidiendo_cafe':
-            const cafe_encontrado = PRODUCTOS_CAFE.find(cafe => cafe.id === opcionNumerica);
+            const cafe_encontrado = productosCafe.find(cafe => cafe.id === opcionNumerica);
 
             if (cafe_encontrado) {
-                pedidoActual.cafe = cafe_encontrado;
+                pedidoTemporal.cafe = cafe_encontrado;
                 botResponse = `Elegiste ${cafe_encontrado.nombre}. ¿Cuántos sacos quieres?`;
                 estadoConversacion = 'pidiendo_cantidad';
             } else {
@@ -140,35 +187,41 @@ function processUserInput(input) {
             const cantidad = opcionNumerica;
 
             if (!isNaN(cantidad) && cantidad > 0) {
-                pedidoActual.cantidad = cantidad;
-                const subtotal = calcular_subtotal(pedidoActual.cantidad, pedidoActual.cafe.precio);
-                pedidoActual.subtotal = subtotal;
+                carrito.push({
+                    cafe: pedidoTemporal.cafe,
+                    cantidad: cantidad
+                });
 
-                let resumen = `Confirmando tu pedido:\n\n` +
-                              `Tipo: ${pedidoActual.cafe.nombre}\n` +
-                              `Cantidad: ${pedidoActual.cantidad} sacos\n` +
-                              `Precio Unitario: $${pedidoActual.cafe.precio.toFixed(2)}\n` +
-                              `----------------------------\n` +
-                              `Subtotal: $${subtotal.toFixed(2)}\n\n` +
-                              `¿Confirmas el pedido? (1. Sí / 2. No)`;
-                botResponse = resumen;
-                estadoConversacion = 'confirmando_pedido';
+                botResponse = `¡${cantidad} sacos de ${pedidoTemporal.cafe.nombre} agregados al carrito!\n\n¿Qué quieres hacer ahora?\n1. Seguir comprando\n2. Ver carrito y finalizar compra`;
+                estadoConversacion = 'gestionando_carrito';
+                pedidoTemporal = {};
             } else {
                 botResponse = "Por favor, ingresa una cantidad NUMÉRICA válida (mayor a cero).";
             }
             break;
-
-        case 'confirmando_pedido':
+        
+        case 'gestionando_carrito':
             if (opcionNumerica === 1) {
-                botResponse = "¡Pedido CONFIRMADO! Gracias por elegirnos. ¡Pronto nos contactaremos para coordinar la entrega!";
-                guardarPedidoEnLocalStorage(pedidoActual); 
+                botResponse = getMenuCafeTexto();
+                estadoConversacion = 'pidiendo_cafe';
+            } else if (opcionNumerica === 2) {
+                mostrarCarrito();
+            } else {
+                botResponse = "Opción inválida. Elige '1' para seguir comprando o '2' para ir al carrito.";
+            }
+            break;
+
+        case 'finalizando_compra':
+            if (opcionNumerica === 1) {
+                guardarPedidoEnLocalStorage(carrito);
+                botResponse = "¡Compra CONFIRMADA! Gracias por elegirnos. ¡Pronto nos contactaremos para coordinar la entrega!";
+                carrito = [];
                 estadoConversacion = 'inicio';
-                pedidoActual = {};
                 setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 500);
             } else if (opcionNumerica === 2) {
-                botResponse = "Pedido CANCELADO. Puedes iniciar uno nuevo cuando quieras.";
+                botResponse = "Compra CANCELADA. Vuelve al menú principal cuando quieras.";
+                carrito = [];
                 estadoConversacion = 'inicio';
-                pedidoActual = {};
                 setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 500);
             } else {
                 botResponse = "Por favor, responde con '1' para confirmar o '2' para cancelar.";
@@ -190,8 +243,8 @@ function processUserInput(input) {
 }
 
 
-// 
-addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot');
+// --- Event Listeners y Lógica de Inicio ---
+cargarProductos();
 
 sendButton.addEventListener('click', () => {
     const input = userInput.value;
