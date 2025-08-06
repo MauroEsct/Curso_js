@@ -214,15 +214,29 @@ function processUserInput(input) {
         case 'finalizando_compra':
             if (opcionNumerica === 1) {
                 guardarPedidoEnLocalStorage(carrito);
-                botResponse = "¡Compra CONFIRMADA! Gracias por elegirnos. ¡Pronto nos contactaremos para coordinar la entrega!";
+                
+                Swal.fire({
+                    title: '¡Compra confirmada!',
+                    text: 'Gracias por elegirnos. ¡Pronto nos contactaremos!',
+                    icon: 'success',
+                    confirmButtonText: 'Aceptar'
+                });
+
                 carrito = [];
                 estadoConversacion = 'inicio';
-                setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 500);
+                setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 2000);
+
             } else if (opcionNumerica === 2) {
-                botResponse = "Compra CANCELADA. Vuelve al menú principal cuando quieras.";
+                Swal.fire({
+                    title: 'Pedido cancelado',
+                    text: 'Puedes iniciar uno nuevo cuando quieras.',
+                    icon: 'error',
+                    confirmButtonText: 'Aceptar'
+                });
+
                 carrito = [];
                 estadoConversacion = 'inicio';
-                setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 500);
+                setTimeout(() => addMessage(MENU_PRINCIPAL_TEXTO.replace(/\n/g, '<br>'), 'bot'), 2000);
             } else {
                 botResponse = "Por favor, responde con '1' para confirmar o '2' para cancelar.";
             }
