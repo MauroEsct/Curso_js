@@ -128,8 +128,6 @@ async function cargarProductos() {
         sendButton.disabled = true;
     }
 }
-
-
 // --- Lógica Principal del Bot ---
 function processUserInput(input) {
     const opcionNumerica = parseInt(input.trim());
