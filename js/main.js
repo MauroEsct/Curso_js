@@ -115,7 +115,7 @@ function mostrarHistorialPedidos() {
 async function cargarProductos() {
     try {
         addMessage("Cargando nuestro catálogo de productos...", 'bot');
-        const response = await fetch('./data/productos.json'); 
+        const response = await fetch('data/productos.json'); 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
